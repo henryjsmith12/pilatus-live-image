@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>  
+    <detector>
+        <image pv="s6_pilatus:image1:ArrayData"/>
+        <image_total pv="s6_pilatus:Stats5:Total_RBV"/>
+        <image_max pv="s6_pilatus:Stats5:MaxValue_RBV"/>
+        <pixel_direction_1>z-</pixel_direction_1>
+        <pixel_direction_2>x-</pixel_direction_2>
+        <center_channel_pixel>252 107</center_channel_pixel>
+        <n_pixels>487 195</n_pixels>
+        <size unit="mm">83.764 33.54</size>
+        <distance unit="mm">900.644</distance>
+        <id>Pilatus</id>
+    </detector>
+    
+    <!--
+    <instrument>
+        <sample_circles>
+            <circle_axis number="1" spec_motor_name="Mu" direction_axis="x+" pv="6idb1:m28.RBV"/>
+            <circle_axis number="2" spec_motor_name="Eta" direction_axis="z-" pv="6idb1:m17.RBV"/>
+            <circle_axis number="3" spec_motor_name="Chi" direction_axis="y+" pv="6idb1:m19.RBV"/>
+            <circle_axis number="4" spec_motor_name="Phi" direction_axis="z-" pv="6idb1:m20.RBV"/>
+        </sample_circles>
+        <detector_circles>
+            <circle_axis number="1" specMotorName="Nu" directionAxis="x+" pv="6idb1:m29.RBV"/>
+            <circle_axis number="2" specMotorName="Delta" directionAxis="z-" pv="6idb1:m18.RBV"/>
+        </detector_circles>
+        <primary_beam_direction>
+            <axis number="1">0</axis>
+            <axis number="2">1</axis>
+            <axis number="3">0</axis>
+        </primary_beam_direction>
+        <inplane_reference_direction>
+            <axis number="1">0</axis>
+            <axis number="2">1</axis>
+            <axis number="3">0</axis>
+        </inplane_reference_direction>
+        <sample_surface_normal_direction>
+            <axis number="1">0</axis>
+            <axis number="2">0</axis>
+            <axis number="3">1</axis>
+        </sample_surface_normal_direction>
+        <monitor_name scale_factor="200000">Ion_Ch_2</monitor_name>
+        <filter_name scale_factor="1">transm</filter_name>
+        <projection_direction>
+            <axis number="1">0</axis>
+            <axis number="2">0</axis>
+            <axis number="3">1</axis>
+        </projection_direction>
+        <ub_matrix pv="6idb:spec:UB_matrix"/>
+    </instrument>
+    -->
+
+    <!--
+    <rois>
+        <roi number="1">
+            <min_x pv="s6_pilatus:ROI1:MinX"/>
+            <max_x pv="s6_pilatus:ROI1:MaxX"/>
+            <min_y pv="s6_pilatus:ROI1:MinY"/>
+            <max_y pv="s6_pilatus:ROI1:MaxY"/>
+            <total pv="s6_pilatus:Stats1:Total_RBV"/>
+        </roi>
+        <roi number="2">
+            <min_x pv="s6_pilatus:ROI2:MinX"/>
+            <max_x pv="s6_pilatus:ROI2:MaxX"/>
+            <min_y pv="s6_pilatus:ROI2:MinY"/>
+            <max_y pv="s6_pilatus:ROI2:MaxY"/>
+            <total pv="s6_pilatus:Stats2:Total_RBV"/>
+        </roi>
+        <roi number="3">
+            <min_x pv="s6_pilatus:ROI3:MinX"/>
+            <max_x pv="s6_pilatus:ROI3:MaxX"/>
+            <min_y pv="s6_pilatus:ROI3:MinY"/>
+            <max_y pv="s6_pilatus:ROI3:MaxY"/>
+            <total pv="s6_pilatus:Stats3:Total_RBV"/>
+        </roi>
+        <roi number="4">
+            <min_x pv="s6_pilatus:ROI4:MinX"/>
+            <max_x pv="s6_pilatus:ROI4:MaxX"/>
+            <min_y pv="s6_pilatus:ROI4:MinY"/>
+            <max_y pv="s6_pilatus:ROI4:MaxY"/>
+            <total pv="s6_pilatus:Stats4:Total_RBV"/>
+        </roi>
+    </rois> 
+    -->
+
+    <!-- <energy pv="6idb:spec:Energy"/> -->
+</config>
