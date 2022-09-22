@@ -11,7 +11,7 @@
         <size unit="mm">83.764 33.54</size>
         <distance unit="mm">900.644</distance>
     </detector>
-    
+
     <instrument>
         <sample_circles>
             <circle_axis number="1" spec_motor_name="Mu" direction_axis="x+" pv="6idb1:m28.RBV"/>
@@ -40,35 +40,34 @@
         </sample_surface_normal_direction>
         <ub_matrix pv="6idb:spec:UB_matrix"/>
     </instrument>
-    -->
 
     <rois>
         <roi number="1">
             <min_x pv="s6_pilatus:ROI1:MinX"/>
-            <max_x pv="s6_pilatus:ROI1:MaxX"/>
+            <size_x pv="s6_pilatus:ROI1:SizeX"/>
             <min_y pv="s6_pilatus:ROI1:MinY"/>
-            <max_y pv="s6_pilatus:ROI1:MaxY"/>
+            <size_y pv="s6_pilatus:ROI1:SizeY"/>
             <total pv="s6_pilatus:Stats1:Total_RBV"/>
         </roi>
         <roi number="2">
             <min_x pv="s6_pilatus:ROI2:MinX"/>
-            <max_x pv="s6_pilatus:ROI2:MaxX"/>
+            <size_x pv="s6_pilatus:ROI2:SizeX"/>
             <min_y pv="s6_pilatus:ROI2:MinY"/>
-            <max_y pv="s6_pilatus:ROI2:MaxY"/>
+            <size_y pv="s6_pilatus:ROI2:SizeY"/>
             <total pv="s6_pilatus:Stats2:Total_RBV"/>
         </roi>
         <roi number="3">
             <min_x pv="s6_pilatus:ROI3:MinX"/>
-            <max_x pv="s6_pilatus:ROI3:MaxX"/>
+            <size_x pv="s6_pilatus:ROI3:SizeX"/>
             <min_y pv="s6_pilatus:ROI3:MinY"/>
-            <max_y pv="s6_pilatus:ROI3:MaxY"/>
+            <size_y pv="s6_pilatus:ROI3:SizeY"/>
             <total pv="s6_pilatus:Stats3:Total_RBV"/>
         </roi>
         <roi number="4">
             <min_x pv="s6_pilatus:ROI4:MinX"/>
-            <max_x pv="s6_pilatus:ROI4:MaxX"/>
+            <size_x pv="s6_pilatus:ROI4:SizeX"/>
             <min_y pv="s6_pilatus:ROI4:MinY"/>
-            <max_y pv="s6_pilatus:ROI4:MaxY"/>
+            <size_y pv="s6_pilatus:ROI4:SizeY"/>
             <total pv="s6_pilatus:Stats4:Total_RBV"/>
         </roi>
     </rois>
