@@ -95,6 +95,9 @@ class MainWindow(DockArea):
         self.addDock(self.options_dock, "right", self.x_dock)
         self.moveDock(self.options_dock, "bottom", self.y_dock)
         self.addDock(self.mouse_dock, "bottom", self.y_dock)
+        self.image_dock.setMinimumSize(400, 275)
+        self.y_dock.setMinimumSize(400, 275)
+        self.x_dock.setMinimumSize(400, 275)
         
         self.image_plot.getView().setXLink(self.x_line_plot)
         self.image_plot.getView().setYLink(self.y_line_plot)
@@ -144,8 +147,8 @@ class ImagePlot(pg.ImageView):
         self.color_map = None
 
     def update(self):
-        #image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
-        image = np.random.rand(195, 487).T
+        image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
+        #image = np.random.rand(195, 487).T
         self.image = image
         self.setImage(image, autoRange=False)
         self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
