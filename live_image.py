@@ -9,6 +9,9 @@ import xrayutilities as xu
 
 HKL_MODE, ROI_MODE = True, True
 
+# =====================================================================
+# Reads config.xml
+
 tree = ET.parse('config.xml')
 root = tree.getroot()
 for child in root:
@@ -65,13 +68,8 @@ for child in root:
         except:
             HKL_MODE = False
 
-# Check for detector
-# Check for instrument
-# Check for energy
-    # Process variables for HKL reading if necessary
-# Check for ROI's
-    # Create ROI's if necessary
-# Create necessary docks
+# =====================================================================
+# UI classes
 
 class MainWindow(DockArea):
     def __init__(self) -> None:
@@ -115,6 +113,7 @@ class MainWindow(DockArea):
                     resizable=False
                 )
                 self.rois.append(roi)
+                self.image_plot.addItem(roi)
             self.roi_widget = ROIInfoWidget(parent=self)
             self.roi_dock = Dock(name="ROI", hideTitle=True, widget=self.roi_widget, size=(3, 3))
             self.addDock(self.roi_dock, "right", self.mouse_dock)
@@ -127,9 +126,8 @@ class MainWindow(DockArea):
         self.image_plot.update()
         if HKL_MODE:
             self.qx, self.qy, self.qz = createRSM()
-            
         if ROI_MODE:
-            ...
+            self.roi_widget.update()
 
 class ImagePlot(pg.ImageView):
     def __init__(self, parent) -> None:
@@ -153,6 +151,7 @@ class ImagePlot(pg.ImageView):
         self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
         self.parent.y_line_plot.plot(x=np.mean(image, 0), y=np.linspace(0, N_CH_2, N_CH_2), clear=True)
 
+
 class OptionsWidget(QtGui.QWidget):
     def __init__(self, parent) -> None:
         super(OptionsWidget, self).__init__()
@@ -168,10 +167,10 @@ class OptionsWidget(QtGui.QWidget):
 
         self.color_map_cbx = QtGui.QComboBox()
         self.color_map_cbx.addItems(self.color_map_list)
-        self.color_map_cbx.setCurrentText("turbo")
+        self.color_map_cbx.setCurrentText("viridis")
         self.scale_cbx = QtGui.QComboBox()
         self.scale_cbx.addItems(self.scale_list)
-        self.scale_cbx.setCurrentText("log")
+        self.scale_cbx.setCurrentText("power")
 
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
@@ -257,10 +256,28 @@ class ROIInfoWidget(QtGui.QWidget):
             self.txts.append(txt)
             self.layout.addWidget(lbl, i, 0)
             self.layout.addWidget(txt, i, 1)
+        self.show_chkbx = QtGui.QCheckBox("Show")
+        self.show_chkbx.setChecked(True)
+        self.layout.addWidget(self.show_chkbx)
+
+        self.show_chkbx.stateChanged.connect(self.toggleROIVisibility)
 
     def update(self):
-        for roi, txt in zip(ROI_PV_LIST, self.txts):
-            txt.setText(str(roi["total"].get()))
+        for roi, roi_pvs, txt in zip(self.parent.rois, ROI_PV_LIST, self.txts):
+            txt.setText(str(roi_pvs["total"].get()))
+            roi.setPos((roi_pvs["min_x"].get(), roi_pvs["min_y"].get()))
+            roi.setSize((roi_pvs["size_x"].get(), roi_pvs["size_y"].get()))
+        
+    def toggleROIVisibility(self):
+        if self.show_chkbx.isChecked():
+            for roi in self.parent.rois:
+                roi.show()
+        else:
+            for roi in self.parent.rois:
+                roi.hide()
+            
+# =====================================================================
+# Utility functions
 
 def createColorMap(name, scale):
     n_pts, base, gamma = 16, 2, 2
@@ -296,6 +313,8 @@ def createRSM():
     angles = [pv.get() for pv in CIRCLE_PV_LIST]
     ub = np.reshape(UB_MATRIX_PV.get(), (3, 3))
     return hxrd.Ang2Q.area(*angles, UB=ub)
+
+# =====================================================================
 
 app = pg.mkQApp("Live Image")
 MainWindow().show()
