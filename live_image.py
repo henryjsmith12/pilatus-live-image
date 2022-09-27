@@ -101,7 +101,7 @@ class MainWindow(DockArea):
         self.addDock(self.options_dock, "bottom", self.slice_dock)
         self.addDock(self.y_dock, "top", self.slice_dock)
         self.addDock(self.y_dock, "right", self.image_dock)
-        self.addDock(self.line_roi_dock, "bottom", self.mouse_dock)
+        #self.addDock(self.line_roi_dock, "bottom", self.mouse_dock)
 
         self.image_dock.setMinimumSize(400, 275)
         self.x_dock.setMinimumSize(400, 275)
@@ -165,7 +165,7 @@ class ImagePlot(pg.ImageView):
 
     def update(self):
         #image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
-        image = (np.random.rand(195, 487).T) ** 16
+        image = (np.random.rand(195, 487).T * 1.5) ** 4
         self.image = image
         self.setImage(image, autoRange=False)
         self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
