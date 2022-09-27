@@ -10,7 +10,7 @@ import xrayutilities as xu
 HKL_MODE, ROI_MODE = True, True
 
 # =====================================================================
-# Reads config.xml
+# CONFIGURATION 
 
 tree = ET.parse('config.xml')
 root = tree.getroot()
@@ -80,46 +80,61 @@ class MainWindow(DockArea):
         self.image_plot = ImagePlot(parent=self)
         self.x_line_plot = pg.PlotWidget(parent=self)
         self.y_line_plot = pg.PlotWidget(parent=self)
+        self.slice_line_plot = pg.PlotWidget(parent=self)
         self.options_widget = OptionsWidget(parent=self)
         self.mouse_widget = MouseInfoWidget(parent=self)
+        self.line_roi_widget = LineROIInfoWidget(parent=self)
 
         self.image_dock = Dock(name="Image", hideTitle=True, widget=self.image_plot, size=(3, 3))
         self.x_dock = Dock(name="x", hideTitle=True, widget=self.x_line_plot, size=(3, 3))
         self.y_dock = Dock(name="y", hideTitle=True, widget=self.y_line_plot, size=(3, 3))
+        self.slice_dock = Dock(name="slice", hideTitle=True, widget=self.slice_line_plot, size=(3, 3))
         self.options_dock = Dock(name="Options", hideTitle=True, widget=self.options_widget, size=(3, 1))
         self.mouse_dock = Dock(name="Mouse", hideTitle=True, widget=self.mouse_widget, size=(3, 3))
+        self.line_roi_dock = Dock(name="Line ROI", hideTitle=True, widget=self.line_roi_widget, size=(3, 3))
 
         self.addDock(self.image_dock)
         self.addDock(self.y_dock, "right", self.image_dock)
         self.addDock(self.x_dock, "bottom", self.image_dock)
-        self.addDock(self.options_dock, "right", self.x_dock)
-        self.moveDock(self.options_dock, "bottom", self.y_dock)
-        self.addDock(self.mouse_dock, "bottom", self.y_dock)
+        self.addDock(self.slice_dock, "right", self.x_dock)
+        self.addDock(self.mouse_dock, "right", self.y_dock)
+        self.addDock(self.options_dock, "bottom", self.slice_dock)
+        self.addDock(self.y_dock, "top", self.slice_dock)
+        self.addDock(self.y_dock, "right", self.image_dock)
+        self.addDock(self.line_roi_dock, "bottom", self.mouse_dock)
+
         self.image_dock.setMinimumSize(400, 275)
-        self.y_dock.setMinimumSize(400, 275)
         self.x_dock.setMinimumSize(400, 275)
+        self.y_dock.setMinimumSize(400, 275)
+        self.slice_dock.setMinimumSize(300, 275)
         
         self.image_plot.getView().setXLink(self.x_line_plot)
         self.image_plot.getView().setYLink(self.y_line_plot)
         self.y_line_plot.invertY(True)
+        self.slice_line_plot.hideAxis("bottom")
+        #self.x_line_plot.plotItem.setLogMode(y=True)
+        #self.y_line_plot.plotItem.setLogMode(x=True)
+        #self.slice_line_plot.plotItem.setLogMode(y=True)
 
         if HKL_MODE:
             self.qx, self.qy, self.qz = createRSM()
             
         if ROI_MODE:
             self.rois = []
+            self.roi_colors = ["ff0000", "0000ff", "4CBB17", "ff00ff"]
             for i in range(4):
                 roi = pg.ROI(
                     pos=(ROI_PV_LIST[i]["min_x"].get(), ROI_PV_LIST[i]["min_y"].get()),
                     size=(ROI_PV_LIST[i]["size_x"].get(), ROI_PV_LIST[i]["size_y"].get()),
                     movable=False,
-                    resizable=False
+                    resizable=False,
+                    pen=pg.mkPen({"color": self.roi_colors[i], "width": 2})
                 )
                 self.rois.append(roi)
                 self.image_plot.addItem(roi)
             self.roi_widget = ROIInfoWidget(parent=self)
             self.roi_dock = Dock(name="ROI", hideTitle=True, widget=self.roi_widget, size=(3, 3))
-            self.addDock(self.roi_dock, "right", self.mouse_dock)
+            self.addDock(self.roi_dock, "bottom", self.mouse_dock)
             
         self.timer = pg.QtCore.QTimer()
         self.timer.timeout.connect(self.update)
@@ -145,15 +160,19 @@ class ImagePlot(pg.ImageView):
 
         self.image = None
         self.color_map = None
+        self.line_roi = pg.LineSegmentROI([[0, 0], [N_CH_1, N_CH_2]])
+        self.addItem(self.line_roi)
 
     def update(self):
-        image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
-        #image = np.random.rand(195, 487).T
+        #image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
+        image = (np.random.rand(195, 487).T) ** 16
         self.image = image
         self.setImage(image, autoRange=False)
         self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
         self.parent.y_line_plot.plot(x=np.mean(image, 0), y=np.linspace(0, N_CH_2, N_CH_2), clear=True)
-
+        
+        slice_data, slice_coords = self.line_roi.getArrayRegion(data=image, img=self.getImageItem(),  returnMappedCoords=True)
+        self.parent.slice_line_plot.plot(x=np.linspace(slice_coords[0][0], slice_coords[0][-1], len(slice_coords[0])), y=slice_data, clear=True)
 
 class OptionsWidget(QtGui.QWidget):
     def __init__(self, parent) -> None:
@@ -251,17 +270,21 @@ class ROIInfoWidget(QtGui.QWidget):
         self.setLayout(self.layout)
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 3)
+        self.layout.setColumnStretch(2, 1)
         for i in range(len(self.parent.rois)):
             label = f"ROI #{i + 1} Total: "
+            color = self.parent.roi_colors[i]
             lbl, txt = QtGui.QLabel(label), QtGui.QLineEdit()
+            print(color)
+            lbl.setStyleSheet(f"color: #{color}")
             txt.setReadOnly(True)
             self.lbls.append(lbl)
             self.txts.append(txt)
             self.layout.addWidget(lbl, i, 0)
             self.layout.addWidget(txt, i, 1)
-        self.show_chkbx = QtGui.QCheckBox("Show")
+        self.show_chkbx = QtGui.QCheckBox("Show Regions")
         self.show_chkbx.setChecked(True)
-        self.layout.addWidget(self.show_chkbx)
+        self.layout.addWidget(self.show_chkbx, 5, 0)
 
         self.show_chkbx.stateChanged.connect(self.toggleROIVisibility)
 
@@ -278,7 +301,21 @@ class ROIInfoWidget(QtGui.QWidget):
         else:
             for roi in self.parent.rois:
                 roi.hide()
-            
+
+class LineROIInfoWidget(QtGui.QWidget):
+    def __init__(self, parent) -> None:
+        super(LineROIInfoWidget, self).__init__()
+        self.parent = parent  
+
+        self.color_btn = pg.ColorButton(color=(255, 255, 255))
+        self.show_chkbx = QtGui.QCheckBox("Show Line ROI")
+        self.show_chkbx.setChecked(True)
+
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.addWidget(self.color_btn, 0, 0)
+        self.layout.addWidget(self.show_chkbx, 1, 0)
+
 # =====================================================================
 # Utility functions
 
