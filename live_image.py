@@ -1,13 +1,21 @@
+from distutils.sysconfig import PREFIX
+import sys
 import epics
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph import QtGui
+from pyqtgraph import QtCore, QtGui
 from pyqtgraph.dockarea import Dock, DockArea
 from sklearn import preprocessing
 import xml.etree.ElementTree as ET
 import xrayutilities as xu
 
 HKL_MODE, ROI_MODE = True, True
+DET_PRESENT, INSTR_PRESENT, ROI_PRESENT, ENERGY_PRESENT = False, False, False, False
+
+PV_PREFIX = "dp_pilatusASD"
+DISTANCE = None
+C_CH_1 = None
+C_CH_2 = None
 
 # =====================================================================
 # CONFIGURATION 
@@ -16,10 +24,11 @@ tree = ET.parse('config.xml')
 root = tree.getroot()
 for child in root:
     if child.tag == "detector":
-        IMAGE_PV = epics.PV(child.find("image").attrib["pv"])
+        DET_PRESENT = True
+        IMAGE_PV = epics.PV(PV_PREFIX + ":" + child.find("image").attrib["pv"])
         try:
-            IMAGE_TOTAL_PV = epics.PV(child.find("image_total").attrib["pv"])
-            IMAGE_MAX_PV = epics.PV(child.find("image_max").attrib["pv"])
+            IMAGE_TOTAL_PV = epics.PV(PV_PREFIX + ":" + child.find("image_total").attrib["pv"])
+            IMAGE_MAX_PV = epics.PV(PV_PREFIX + ":" + child.find("image_max").attrib["pv"])
             PIXEL_DIR_1 = child.find("pixel_direction_1").text 
             PIXEL_DIR_2 = child.find("pixel_direction_2").text
             C_CH_1 = int(child.find("center_channel_pixel").text.split()[0])
@@ -33,6 +42,7 @@ for child in root:
         except:
             HKL_MODE = False
     elif child.tag == "instrument":
+        INSTR_PRESENT = True
         try:
             sample_circles = child.find("sample_circles")
             SAMPLE_CIRCLE_DIR, SAMPLE_CIRCLE_NAMES, SAMPLE_CIRCLE_PV_LIST = [], [], []
@@ -59,17 +69,76 @@ for child in root:
             ROI_PV_LIST = [{}, {}, {}, {}]
             for roi, roi_pv_dict in zip(child, ROI_PV_LIST):
                 for roi_attr in roi:
-                    roi_pv_dict[roi_attr.tag] = epics.PV(roi_attr.attrib["pv"])
+                    pv = PV_PREFIX + ":" + roi_attr.attrib["pv"]
+                    roi_pv_dict[roi_attr.tag] = epics.PV(pv)
         except:
             ROI_MODE = False
     elif child.tag == "energy":
+        ENERGY_PRESENT = True
         try:
             ENERGY_PV = epics.PV(child.attrib["pv"])
         except:
             HKL_MODE = False
 
+if HKL_MODE:
+    HKL_MODE = not False in [DET_PRESENT, INSTR_PRESENT, ENERGY_PRESENT]
+
+if ROI_MODE:
+    ROI_MODE = ROI_PRESENT
+    if "not connected" in str(ROI_PV_LIST):
+        ROI_MODE = False
+
 # =====================================================================
 # UI classes
+class OptionsDialog(QtGui.QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+
+        self.prefix_lbl, self.prefix_txt = QtGui.QLabel("PV Prefix: "), QtGui.QLineEdit()
+        self.distance_lbl, self.distance_sbx = QtGui.QLabel("Distance: "), QtGui.QDoubleSpinBox()
+        self.center_x_lbl, self.center_x_sbx = QtGui.QLabel("Center (x): "), QtGui.QSpinBox()
+        self.center_y_lbl, self.center_y_sbx = QtGui.QLabel("Center (y): "), QtGui.QSpinBox()
+        self.btn_bx = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok)
+
+        self.distance_sbx.setRange(0, 1000000) 
+        self.center_x_sbx.setRange(-1000, 1000) 
+        self.center_y_sbx.setRange(-1000, 1000)
+
+
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.addWidget(self.prefix_lbl, 0, 0)
+        self.layout.addWidget(self.prefix_txt, 0, 1)
+        self.layout.addWidget(self.distance_lbl, 1, 0)
+        self.layout.addWidget(self.distance_sbx, 1, 1)
+        self.layout.addWidget(self.center_x_lbl, 2, 0)
+        self.layout.addWidget(self.center_x_sbx, 2, 1)
+        self.layout.addWidget(self.center_y_lbl, 3, 0)
+        self.layout.addWidget(self.center_y_sbx, 3, 1)
+        self.layout.addWidget(self.btn_bx, 4, 0, 1, 2)
+
+        if PV_PREFIX is not None:
+            self.prefix_txt.setText(PV_PREFIX)
+        if DISTANCE is not None:
+            self.distance_sbx.setValue(DISTANCE)
+        if C_CH_1 is not None:
+            self.center_x_sbx.setValue(C_CH_1)
+        if C_CH_2 is not None:
+            self.center_y_sbx.setValue(C_CH_2)
+
+        self.btn_bx.accepted.connect(self.accept)
+        
+    def accept(self):
+        PV_PREFIX = self.prefix_txt.text()
+        DISTANCE = self.distance_sbx.value()
+        C_CH_1 = self.center_x_sbx.value()
+        C_CH_2 = self.center_y_sbx.value()
+        self.close()
+        mw = MainWindow()
+        mw.show()
+        
+    def reject(self):
+        sys.exit()
 
 class MainWindow(DockArea):
     def __init__(self) -> None:
@@ -115,6 +184,7 @@ class MainWindow(DockArea):
         #self.x_line_plot.plotItem.setLogMode(y=True)
         #self.y_line_plot.plotItem.setLogMode(x=True)
         #self.slice_line_plot.plotItem.setLogMode(y=True)
+
 
         if HKL_MODE:
             self.qx, self.qy, self.qz = createRSM()
@@ -164,8 +234,8 @@ class ImagePlot(pg.ImageView):
         self.addItem(self.line_roi)
 
     def update(self):
-        #image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
-        image = (np.random.rand(195, 487).T * 1.5) ** 4
+        image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
+        #image = (np.random.rand(195, 487).T * 1.5) ** 4
         self.image = image
         self.setImage(image, autoRange=False)
         self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
@@ -357,5 +427,6 @@ def createRSM():
 # =====================================================================
 
 app = pg.mkQApp("Live Image")
-MainWindow().show()
+od = OptionsDialog()
+od.show()
 pg.mkQApp().exec_()
