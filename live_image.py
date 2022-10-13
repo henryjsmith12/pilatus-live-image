@@ -65,6 +65,7 @@ for child in root:
         except:
             HKL_MODE = False
     elif child.tag == "rois":
+        ROI_PRESENT = True
         try:
             ROI_PV_LIST = [{}, {}, {}, {}]
             for roi, roi_pv_dict in zip(child, ROI_PV_LIST):
@@ -85,8 +86,6 @@ if HKL_MODE:
 
 if ROI_MODE:
     ROI_MODE = ROI_PRESENT
-    if "not connected" in str(ROI_PV_LIST):
-        ROI_MODE = False
 
 # =====================================================================
 # UI classes
@@ -176,6 +175,7 @@ class MainWindow(DockArea):
         self.x_dock.setMinimumSize(400, 275)
         self.y_dock.setMinimumSize(400, 275)
         self.slice_dock.setMinimumSize(300, 275)
+        self.mouse_dock.setMinimumSize(200, 275)
         
         self.image_plot.getView().setXLink(self.x_line_plot)
         self.image_plot.getView().setYLink(self.y_line_plot)
