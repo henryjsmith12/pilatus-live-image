@@ -1,17 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config>  
     <detector>
-        <image pv="s6_pilatus:image1:ArrayData"/>
-        <image_total pv="s6_pilatus:Stats5:Total_RBV"/>
-        <image_max pv="s6_pilatus:Stats5:MaxValue_RBV"/>
+        <image pv="image1:ArrayData"/>
+        <n_pixels>487 195</n_pixels>
+        <image_total pv="Stats5:Total_RBV"/>
+        <image_max pv="Stats5:MaxValue_RBV"/>
         <pixel_direction_1>z-</pixel_direction_1>
         <pixel_direction_2>x-</pixel_direction_2>
         <center_channel_pixel>252 107</center_channel_pixel>
-        <n_pixels>487 195</n_pixels>
         <size unit="mm">83.764 33.54</size>
         <distance unit="mm">900.644</distance>
     </detector>
 
+    <rois>
+        <roi number="1">
+            <min_x pv="ROI1:MinX"/>
+            <size_x pv="ROI1:SizeX"/>
+            <min_y pv="ROI1:MinY"/>
+            <size_y pv="ROI1:SizeY"/>
+            <total pv="Stats1:Total_RBV"/>
+        </roi>
+        <roi number="2">
+            <min_x pv="ROI2:MinX"/>
+            <size_x pv="ROI2:SizeX"/>
+            <min_y pv="ROI2:MinY"/>
+            <size_y pv="ROI2:SizeY"/>
+            <total pv="Stats2:Total_RBV"/>
+        </roi>
+        <roi number="3">
+            <min_x pv="ROI3:MinX"/>
+            <size_x pv="ROI3:SizeX"/>
+            <min_y pv="ROI3:MinY"/>
+            <size_y pv="ROI3:SizeY"/>
+            <total pv="Stats3:Total_RBV"/>
+        </roi>
+        <roi number="4">
+            <min_x pv="ROI4:MinX"/>
+            <size_x pv="ROI4:SizeX"/>
+            <min_y pv="ROI4:MinY"/>
+            <size_y pv="ROI4:SizeY"/>
+            <total pv="Stats4:Total_RBV"/>
+        </roi>
+    </rois>
+
+    
     <instrument>
         <sample_circles>
             <circle_axis number="1" spec_motor_name="Mu" direction_axis="x+" pv="6idb1:m28.RBV"/>
@@ -40,37 +72,6 @@
         </sample_surface_normal_direction>
         <ub_matrix pv="6idb:spec:UB_matrix"/>
     </instrument>
-
-    <rois>
-        <roi number="1">
-            <min_x pv="s6_pilatus:ROI1:MinX"/>
-            <size_x pv="s6_pilatus:ROI1:SizeX"/>
-            <min_y pv="s6_pilatus:ROI1:MinY"/>
-            <size_y pv="s6_pilatus:ROI1:SizeY"/>
-            <total pv="s6_pilatus:Stats1:Total_RBV"/>
-        </roi>
-        <roi number="2">
-            <min_x pv="s6_pilatus:ROI2:MinX"/>
-            <size_x pv="s6_pilatus:ROI2:SizeX"/>
-            <min_y pv="s6_pilatus:ROI2:MinY"/>
-            <size_y pv="s6_pilatus:ROI2:SizeY"/>
-            <total pv="s6_pilatus:Stats2:Total_RBV"/>
-        </roi>
-        <roi number="3">
-            <min_x pv="s6_pilatus:ROI3:MinX"/>
-            <size_x pv="s6_pilatus:ROI3:SizeX"/>
-            <min_y pv="s6_pilatus:ROI3:MinY"/>
-            <size_y pv="s6_pilatus:ROI3:SizeY"/>
-            <total pv="s6_pilatus:Stats3:Total_RBV"/>
-        </roi>
-        <roi number="4">
-            <min_x pv="s6_pilatus:ROI4:MinX"/>
-            <size_x pv="s6_pilatus:ROI4:SizeX"/>
-            <min_y pv="s6_pilatus:ROI4:MinY"/>
-            <size_y pv="s6_pilatus:ROI4:SizeY"/>
-            <total pv="s6_pilatus:Stats4:Total_RBV"/>
-        </roi>
-    </rois>
 
     <energy pv="6idb:spec:Energy"/>
 </config>
