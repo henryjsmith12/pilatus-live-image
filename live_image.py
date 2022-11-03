@@ -354,7 +354,20 @@ class ROIInfoWidget(QtGui.QWidget):
             self.layout.addWidget(txt, i, 1)
         self.show_chkbx = QtGui.QCheckBox("Show Regions")
         self.show_chkbx.setChecked(True)
-        self.layout.addWidget(self.show_chkbx, 5, 0)
+        
+        self.img_total_lbl = QtGui.QLabel("Image Total: ")
+        self.img_total_txt = QtGui.QLineEdit()
+        self.img_total_txt.setReadOnly(True)
+        self.layout.addWidget(self.img_total_lbl, 5, 0)
+        self.layout.addWidget(self.img_total_txt, 5, 1)
+
+        self.img_max_lbl = QtGui.QLabel("Image Max: ")
+        self.img_max_txt = QtGui.QLineEdit()
+        self.img_max_txt.setReadOnly(True)
+        self.layout.addWidget(self.img_max_lbl, 6, 0)
+        self.layout.addWidget(self.img_max_txt, 6, 1)
+
+        self.layout.addWidget(self.show_chkbx, 7, 0)
 
         self.show_chkbx.stateChanged.connect(self.toggleROIVisibility)
 
@@ -363,6 +376,9 @@ class ROIInfoWidget(QtGui.QWidget):
             txt.setText(str(roi_pvs["total"].get()))
             roi.setPos((roi_pvs["min_x"].get(), roi_pvs["min_y"].get()))
             roi.setSize((roi_pvs["size_x"].get(), roi_pvs["size_y"].get()))
+
+        self.img_total_txt.setText(str(IMAGE_TOTAL_PV.get()))
+        self.img_max_txt.setText(str(IMAGE_MAX_PV.get()))
         
     def toggleROIVisibility(self):
         if self.show_chkbx.isChecked():
