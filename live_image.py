@@ -149,7 +149,7 @@ class MainWindow(DockArea):
         self.x_line_plot = pg.PlotWidget(parent=self)
         self.y_line_plot = pg.PlotWidget(parent=self)
         self.slice_line_plot = pg.PlotWidget(parent=self)
-        self.options_widget = OptionsWidget(parent=self)
+        self.options_widget =  ColorMapController(parent=self)
         self.mouse_widget = MouseInfoWidget(parent=self)
         self.line_roi_widget = LineROIInfoWidget(parent=self)
 
@@ -185,7 +185,6 @@ class MainWindow(DockArea):
         #self.y_line_plot.plotItem.setLogMode(x=True)
         #self.slice_line_plot.plotItem.setLogMode(y=True)
 
-
         if HKL_MODE:
             self.qx, self.qy, self.qz = createRSM()
             
@@ -210,12 +209,21 @@ class MainWindow(DockArea):
         self.timer.timeout.connect(self.update)
         self.timer.start(50)
 
+        self.options_widget.colorMapChanged.connect(self._setColorMap)
+
     def update(self):
         self.image_plot.update()
         if HKL_MODE:
             self.qx, self.qy, self.qz = createRSM()
         if ROI_MODE:
             self.roi_widget.update()
+
+    def _setColorMap(self):
+        color_map = self.options_widget.color_map
+        range = (0, self.options_widget.color_map_max)
+
+        self.image_plot._setColorMap(color_map, range)
+
 
 class ImagePlot(pg.ImageView):
     def __init__(self, parent) -> None:
@@ -228,21 +236,54 @@ class ImagePlot(pg.ImageView):
         self.getView().setAspectLocked(False)
         self.getView().ctrlMenu = None
 
-        self.image = None
+        self.image_data = None
         self.color_map = None
+        self.color_bar = None
         self.line_roi = pg.LineSegmentROI([[0, 0], [N_CH_1, N_CH_2]])
         self.addItem(self.line_roi)
 
     def update(self):
         image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
         #image = (np.random.rand(195, 487).T * 1.5) ** 4
-        self.image = image
-        self.setImage(image, autoRange=False)
+        self.image_data = image
+        if self.color_map is None:
+            self.parent._setColorMap()
+
+        norm_image = np.copy(self.image_data)
+        if self.color_map_range is None:
+            norm_max = 1
+        else:
+            norm_max = self.color_map_range[-1]
+        norm_image[norm_image > norm_max] = norm_max
+        norm_image = norm_image / norm_max
+        self.norm_image = norm_image
+
+        self.setImage(self.norm_image, autoRange=False, autoLevels=False)
         self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
         self.parent.y_line_plot.plot(x=np.mean(image, 0), y=np.linspace(0, N_CH_2, N_CH_2), clear=True)
         
         slice_data, slice_coords = self.line_roi.getArrayRegion(data=image, img=self.getImageItem(),  returnMappedCoords=True)
         self.parent.slice_line_plot.plot(x=np.linspace(slice_coords[0][0], slice_coords[0][-1], len(slice_coords[0])), y=slice_data, clear=True)
+
+    def _setColorMap(self, color_map, range):
+        self.color_map = color_map
+        self.color_map_range = range
+
+        if self.color_bar is None:
+            self.color_bar = pg.ColorBarItem(
+                values=range,
+                cmap=color_map, 
+                interactive=False,
+                width=15,
+                orientation="v"
+            )
+            self.color_bar.setImageItem(
+                img=self.image_data,
+                insert_in=self.getView()
+            )
+        self.setColorMap(color_map)
+        self.color_bar.setLevels(range)
+
 
 class OptionsWidget(QtGui.QWidget):
     def __init__(self, parent) -> None:
@@ -257,28 +298,31 @@ class OptionsWidget(QtGui.QWidget):
         self.color_map_list = sorted(color_map_names)
         self.scale_list = sorted(scales)
 
+        self.color_map = None
+
         self.color_map_cbx = QtGui.QComboBox()
         self.color_map_cbx.addItems(self.color_map_list)
         self.color_map_cbx.setCurrentText("viridis")
         self.scale_cbx = QtGui.QComboBox()
         self.scale_cbx.addItems(self.scale_list)
         self.scale_cbx.setCurrentText("power")
+        self.max_lbl = QtGui.QLabel("Max: ")
+        self.max_sbx = QtGui.QSpinBox()
+        self.max_sbx.setMaximum(1000000)
+        self.max_sbx.setMinimum(1)
+        self.max_sbx.setValue(10000)
 
         self.layout = QtGui.QGridLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(self.color_map_cbx, 0, 0)
         self.layout.addWidget(self.scale_cbx, 0, 1)
+        self.layout.addWidget(self.max_lbl, 0, 2)
+        self.layout.addWidget(self.max_sbx, 0, 3)
 
         self.color_map_cbx.currentTextChanged.connect(self.setColorMap)
         self.scale_cbx.currentTextChanged.connect(self.setColorMap)
 
         self.setColorMap()
-
-    def setColorMap(self):
-        name = self.color_map_cbx.currentText()
-        scale = self.scale_cbx.currentText()
-        color_map = createColorMap(name, scale)
-        self.parent.image_plot.setColorMap(color_map)
 
 class MouseInfoWidget(QtGui.QWidget):
     def __init__(self, parent) -> None:
@@ -316,7 +360,7 @@ class MouseInfoWidget(QtGui.QWidget):
             x, y = view_point.x(), view_point.y()
             self.txts[0].setText(str(round(x, 7)))
             self.txts[1].setText(str(round(y, 7)))
-            img = self.parent.image_plot.image
+            img = self.parent.image_plot.image_data
             if 0 <= x < img.shape[0] and 0 <= y < img.shape[1]:
                 self.txts[2].setText(str(round(img[int(x)][int(y)], 5)))
                 if HKL_MODE:
@@ -405,30 +449,192 @@ class LineROIInfoWidget(QtGui.QWidget):
 # =====================================================================
 # Utility functions
 
-def createColorMap(name, scale):
-    n_pts, base, gamma = 16, 2, 2
+class ColorMapController(QtGui.QWidget):
+    """Allows user to apply a colormap to an image."""
+
+    colorMapChanged = QtCore.pyqtSignal()
+
+    def __init__(self, parent) -> None:
+        super(ColorMapController, self).__init__()
+
+        self.parent = parent
+        self.color_map = None
+        self.color_map_max = None
+
+        available_color_maps = [
+            'magma', 'inferno', 'plasma', 'viridis', 'cividis', 'twilight',
+            'turbo', 'cool', 'coolwarm', 'afmhot', 'autumn', 'copper',
+            'cubehelix', 'gnuplot', 'gnuplot2', 'gray', 'hot', 'hsv', 'jet',
+            'nipy_spectral', 'ocean', 'pink', 'prism', 'rainbow',
+            'spring', 'summer', 'winter'
+        ]
+        available_color_maps = sorted(available_color_maps)
+        scales = ["linear", "log", "power"]
+
+        self.name = available_color_maps[0]
+        self.scale = scales[0]
+        self.n_pts = 16
+        self.base = 2.0
+        self.gamma = 2.0
+
+        # Child widgets
+        self.name_cbx = QtGui.QComboBox()
+        self.name_cbx.addItems(available_color_maps)
+        self.scale_cbx = QtGui.QComboBox()
+        self.scale_cbx.addItems(scales)
+        self.n_pts_lbl = QtGui.QLabel("# Points:")
+        self.n_pts_sbx = QtGui.QSpinBox()
+        self.n_pts_sbx.setMinimum(2)
+        self.n_pts_sbx.setMaximum(256)
+        self.n_pts_sbx.setValue(16)
+        self.base_lbl = QtGui.QLabel("Base:")
+        self.base_lbl.setAlignment(
+            QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter
+        )
+        self.base_lbl.hide()
+        self.base_sbx = QtGui.QDoubleSpinBox()
+        self.base_sbx.setMinimum(0.0001)
+        self.base_sbx.setMaximum(1000)
+        self.base_sbx.setSingleStep(0.1)
+        self.base_sbx.hide()
+        self.base_sbx.setValue(2.0)
+        self.gamma_lbl = QtGui.QLabel("Gamma:")
+        self.gamma_lbl.setAlignment(
+            QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter
+        )
+        self.gamma_lbl.hide()
+        self.gamma_sbx = QtGui.QDoubleSpinBox()
+        self.gamma_sbx.setMinimum(0.0001)
+        self.gamma_sbx.setMaximum(1000)
+        self.gamma_sbx.setSingleStep(0.1)
+        self.gamma_sbx.hide()
+        self.gamma_sbx.setValue(2.0)
+        self.max_value_lbl = QtGui.QLabel("Max: ")
+        self.max_value_lbl.setAlignment(
+            QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter
+        )
+        self.max_value_sbx = QtGui.QSpinBox()
+        self.max_value_sbx.setMinimum(1)
+        self.max_value_sbx.setMaximum(1000000)
+        self.max_value_sbx.setSingleStep(1)
+        self.max_value_sbx.setValue(1000)
+
+        # Layout
+        self.layout = QtGui.QGridLayout()
+        self.setLayout(self.layout)
+        self.layout.addWidget(self.name_cbx, 0, 0, 1, 2)
+        self.layout.addWidget(self.scale_cbx, 1, 0, 1, 2)
+        self.layout.addWidget(self.base_lbl, 2, 0)
+        self.layout.addWidget(self.base_sbx, 2, 1)
+        self.layout.addWidget(self.gamma_lbl, 2, 0)
+        self.layout.addWidget(self.gamma_sbx, 2, 1)
+        self.layout.addWidget(self.max_value_lbl, 3, 0)
+        self.layout.addWidget(self.max_value_sbx, 3, 1)
+
+        # Connections
+        self.name_cbx.currentIndexChanged.connect(self._setColorMap)
+        self.scale_cbx.currentIndexChanged.connect(self._setColorMap)
+        self.scale_cbx.currentIndexChanged.connect(self._toggleScaleOptions)
+        self.n_pts_sbx.valueChanged.connect(self._setColorMap)
+        self.base_sbx.valueChanged.connect(self._setColorMap)
+        self.gamma_sbx.valueChanged.connect(self._setColorMap)
+        self.max_value_sbx.valueChanged.connect(self._setColorMapBounds)
+
+        # Sets initial color map
+        self._setColorMap()
+        self._setColorMapBounds()
+
+    def _setColorMap(self) -> None:
+        """Sets parameters for color map creation and emits signal."""
+
+        self.name = self.name_cbx.currentText()
+        self.scale = self.scale_cbx.currentText()
+        self.n_pts = self.n_pts_sbx.value()
+        self.base = self.base_sbx.value()
+        self.gamma = self.gamma_sbx.value()
+
+        self.color_map = createColorMap(
+            name=self.name,
+            scale=self.scale,
+            base=self.base,
+            gamma=self.gamma
+        )
+
+        self.colorMapChanged.emit()
+
+    def _toggleScaleOptions(self) -> None:
+        """Hides/shows respective options for each color map scale."""
+
+        if self.scale_cbx.currentText() == "linear":
+            self.base_lbl.hide()
+            self.base_sbx.hide()
+            self.gamma_lbl.hide()
+            self.gamma_sbx.hide()
+        elif self.scale_cbx.currentText() == "log":
+            self.base_lbl.show()
+            self.base_sbx.show()
+            self.gamma_lbl.hide()
+            self.gamma_sbx.hide()
+        elif self.scale_cbx.currentText() == "power":
+            self.base_lbl.hide()
+            self.base_sbx.hide()
+            self.gamma_lbl.show()
+            self.gamma_sbx.show()
+
+    def _setColorMapBounds(self) -> None:
+        """Sets maximum pixel value for color map."""
+
+        self.color_map_max = self.max_value_sbx.value()
+        self.colorMapChanged.emit()
+
+def createColorMap(
+    name: str,
+    scale: str,
+    min: float=0.0,
+    max: float=1.0,
+    n_pts: int=16,
+    base: float=1.75,
+    gamma: float=2
+) -> pg.ColorMap:
+    """Returns a color map object created from given parameters."""
 
     if name in pg.colormap.listMaps(source="matplotlib"):
-        colors = pg.getFromMatplotlib(name).getLookupTable(nPts=n_pts, alpha=False)
+        colors = pg.colormap.getFromMatplotlib(name).getLookupTable(nPts=n_pts)
+    elif name in pg.colormap.listMaps(source="colorcet"):
+        colors = pg.colormap.getFromColorcet(name).getLookupTable(nPts=n_pts)
     elif name in pg.colormap.listMaps():
-        colors = pg.get(name).getLookupTable(nPts=n_pts, alpha=False)
+        colors = pg.get(name).getLookupTable(nPts=n_pts)
     else:
         raise KeyError("Color map not found.")
-    
+
     if scale == "linear":
-        stops = np.array([list(np.linspace(start=0, stop=1, num=n_pts))])
+        stops = np.linspace(start=min, stop=max, num=n_pts)
+        stops = np.array([list(stops)])
+        stops = preprocessing.normalize(stops, norm="max")
+        stops = list(stops[0])
     elif scale == "log":
-        stops = np.array([list(np.logspace(start=0, stop=7.5, endpoint=True, num=n_pts, base=base))])
+        stops = np.logspace(
+            start=0,
+            stop=7.5,
+            endpoint=True,
+            num=n_pts,
+            base=base
+        )
+        stops = np.array([list(stops)])
+        stops = preprocessing.normalize(stops, norm="max")
+        stops = list(stops[0])
     elif scale == "power":
-        stops = np.linspace(start=0, stop=1, num=n_pts)
+        stops = np.linspace(start=min, stop=max, num=n_pts)
+        stops -= min
         stops[stops < 0] = 0
         np.power(stops, gamma, stops)
+        stops /= (max - min) ** gamma
         stops = np.array([list(stops)])
+        stops = preprocessing.normalize(stops, norm="max")
+        stops = list(stops[0])
     else:
         raise ValueError("Scale type not valid.")
 
-    stops = preprocessing.normalize(stops, norm="max")
-    stops = list(stops[0])
     return pg.ColorMap(pos=stops, color=colors)
 
 def createRSM():
