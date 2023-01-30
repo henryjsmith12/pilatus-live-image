@@ -2,12 +2,12 @@
 <config>  
     <detector>
         <image pv="image1:ArrayData"/>
-        <n_pixels>487 195</n_pixels>
+        <n_pixels>516 516</n_pixels>
         <image_total pv="Stats5:Total_RBV"/>
         <image_max pv="Stats5:MaxValue_RBV"/>
         <pixel_direction_1>z-</pixel_direction_1>
         <pixel_direction_2>x-</pixel_direction_2>
-        <center_channel_pixel>252 107</center_channel_pixel>
+        <center_channel_pixel>256 256</center_channel_pixel>
         <size unit="mm">83.764 33.54</size>
         <distance unit="mm">900.644</distance>
     </detector>
@@ -43,7 +43,6 @@
         </roi>
     </rois>
 
-    
     <instrument>
         <sample_circles>
             <circle_axis number="1" spec_motor_name="Mu" direction_axis="x+" pv="6idb1:m28.RBV"/>
