@@ -55,6 +55,26 @@ for child in root:
 for child in root:        
     if child.tag == "detector":
         CONFIG["DET_PRESENT"] = True
+        try:
+            CONFIG["IMAGE_PV"] = epics.PV(CONFIG["PV_PREFIX"] + ":" + child.find("image").attrib["pv"])
+        except:
+            raise KeyError("Missing detector image PV.")
+        try:
+            CONFIG["IMAGE_TOTAL_PV"] = epics.PV(CONFIG["PV_PREFIX"] + ":" + child.find("image_total").attrib["pv"])
+            CONFIG["IMAGE_MAX_PV"] = epics.PV(CONFIG["PV_PREFIX"] + ":" + child.find("image_max").attrib["pv"])
+            CONFIG["PIXEL_DIR_1"] = child.find("pixel_direction_1").text 
+            CONFIG["PIXEL_DIR_2"] = child.find("pixel_direction_2").text
+            CONFIG["C_CH_1"] = int(child.find("center_channel_pixel").text.split()[0])
+            CONFIG["C_CH_2"] = int(child.find("center_channel_pixel").text.split()[1])
+            CONFIG["N_CH_1"] = int(child.find("n_pixels").text.split()[0])
+            CONFIG["N_CH_2"] = int(child.find("n_pixels").text.split()[1])
+            CONFIG["PIXEL_WIDTH_1"] = float(child.find("size").text.split()[0]) / CONFIG["N_CH_1"]
+            CONFIG["PIXEL_WIDTH_2"] = float(child.find("size").text.split()[1]) / CONFIG["N_CH_2"]
+            CONFIG["DISTANCE"] = float(child.find("distance").text)
+            CONFIG["DET_ROI"] = [0, CONFIG["N_CH_1"], 0, CONFIG["N_CH_2"]]
+        except:
+            CONFIG["DET_PRESENT"] = False
+
     elif child.tag == "instrument":
         CONFIG["INSTR_PRESENT"] = True
     elif child.tag == "rois":
@@ -62,5 +82,4 @@ for child in root:
     elif child.tag == "energy":
         CONFIG["ENERGY_PRESENT"] = True
 
-print(CONFIG["PV_PREFIX"])
     
