@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<config>  
+<config>
+    <pv_prefix>DP_LAMBDA250K_1</pv_prefix>
     <detector>
         <image pv="image1:ArrayData"/>
         <n_pixels>516 516</n_pixels>
@@ -11,7 +12,6 @@
         <size unit="mm">83.764 33.54</size>
         <distance unit="mm">900.644</distance>
     </detector>
-
     <rois>
         <roi number="1">
             <min_x pv="ROI1:MinX"/>
@@ -42,7 +42,6 @@
             <total pv="Stats4:Total_RBV"/>
         </roi>
     </rois>
-
     <instrument>
         <sample_circles>
             <circle_axis number="1" spec_motor_name="Mu" direction_axis="x+" pv="6idb1:m28.RBV"/>
@@ -71,6 +70,5 @@
         </sample_surface_normal_direction>
         <ub_matrix pv="6idb:spec:UB_matrix"/>
     </instrument>
-
     <energy pv="6idb:spec:Energy"/>
 </config>
