@@ -1,5 +1,6 @@
 import epics
 import xml.etree.ElementTree as ET
+import xrayutilities as xu
 
 # =====================================================================
 # Global configuration dictionary used for all PV reading
@@ -77,6 +78,28 @@ for child in root:
 
     elif child.tag == "instrument":
         CONFIG["INSTR_PRESENT"] = True
+        try:
+            sample_circles = child.find("sample_circles")
+            CONFIG["SAMPLE_CIRCLE_DIR"], CONFIG["SAMPLE_CIRCLE_NAMES"], CONFIG["SAMPLE_CIRCLE_PV_LIST"] = [], [], []
+            for circle_axis in sample_circles:
+                CONFIG["SAMPLE_CIRCLE_NAMES"].append(circle_axis.attrib["spec_motor_name"])
+                CONFIG["SAMPLE_CIRCLE_DIR"].append(circle_axis.attrib["direction_axis"])
+                CONFIG["SAMPLE_CIRCLE_PV_LIST"].append(epics.PV(circle_axis.attrib["pv"]))
+            detector_circles = child.find("detector_circles")
+            CONFIG["DET_CIRCLE_DIR"], CONFIG["DET_CIRCLE_NAMES"], CONFIG["DET_CIRCLE_PV_LIST"] = [], [], []
+            for circle_axis in detector_circles:
+                CONFIG["DET_CIRCLE_NAMES"].append(circle_axis.attrib["spec_motor_name"])
+                CONFIG["DET_CIRCLE_DIR"].append(circle_axis.attrib["direction_axis"])
+                CONFIG["DET_CIRCLE_PV_LIST"].append(epics.PV(circle_axis.attrib["pv"]))
+            CONFIG["CIRCLE_PV_LIST"] = CONFIG["SAMPLE_CIRCLE_PV_LIST"] + CONFIG["DET_CIRCLE_PV_LIST"]
+            CONFIG["PRIMARY_BEAM_DIR"] = [int(axis.text) for axis in child.find("primary_beam_direction")]
+            CONFIG["INPLANE_REF_DIR"] = [int(axis.text) for axis in child.find("inplane_reference_direction")]
+            CONFIG["SAMPLE_NORM_DIR"] = [int(axis.text) for axis in child.find("sample_surface_normal_direction")]
+            CONFIG["Q_CONV"] = xu.experiment.QConversion(CONFIG["SAMPLE_CIRCLE_DIR"], CONFIG["DET_CIRCLE_DIR"], CONFIG["PRIMARY_BEAM_DIR"])
+            CONFIG["UB_MATRIX_PV"] = epics.PV(child.find("ub_matrix").attrib["pv"])
+        except:
+            CONFIG["HKL_MODE"] = False
+
     elif child.tag == "rois":
         CONFIG["ROI_PRESENT"] = True
     elif child.tag == "energy":
