@@ -1,110 +1,150 @@
-from distutils.sysconfig import PREFIX
-import sys
 import epics
 import numpy as np
+from PyQt5 import QtCore, QtWidgets
 import pyqtgraph as pg
-from pyqtgraph import QtCore, QtGui
 from pyqtgraph.dockarea import Dock, DockArea
 from sklearn import preprocessing
+import sys
 import xml.etree.ElementTree as ET
 import xrayutilities as xu
 
-HKL_MODE, ROI_MODE = True, True
-DET_PRESENT, INSTR_PRESENT, ROI_PRESENT, ENERGY_PRESENT = False, False, False, False
+# =====================================================================
+# Global configuration dictionary used for all PV reading
 
-PV_PREFIX = "dp_pilatusASD"
-DISTANCE = None
-C_CH_1 = None
-C_CH_2 = None
+CONFIG = {
+    "HKL_MODE": True, "ROI_MODE": True,
+    "DET_PRESENT": False, "INSTR_PRESENT": False, "ROI_PRESENT": False, "ENERGY_PRESENT": False,
+    "PV_PREFIX": None,
+    "IMAGE_PV": None, "IMAGE_TOTAL_PV": None, "IMAGE_MAX_PV": None, 
+    "PIXEL_DIR_1": None, "PIXEL_DIR_2": None,
+    "C_CH_1": None, "C_CH_2": None,
+    "N_CH_1": None, "N_CH_2": None,
+    "PIXEL_WIDTH_1": None, "PIXEL_WIDTH_2": None,
+    "DISTANCE": None,
+    "DET_ROI": None,
+    "SAMPLE_CIRCLE_DIR": None, "SAMPLE_CIRCLE_NAMES": None, "SAMPLE_CIRCLE_PV_LIST": None,
+    "DET_CIRCLE_DIR": None, "DET_CIRCLE_NAMES": None, "DET_CIRCLE_PV_LIST": None,
+    "CIRCLE_PV_LIST": None,
+    "PRIMARY_BEAM_DIR": None, "INPLANE_REF_DIR": None, "SAMPLE_NORM_DIR": None,
+    "Q_CONV": None,
+    "UB_MATRIX_PV": None,
+    "ROI_PV_LIST": None,
+    "ENERGY_PV": None
+}
 
 # =====================================================================
-# CONFIGURATION 
+# Reads configuration values from XML file (config.xml)
+def configure():
+    tree = ET.parse("config.xml")
+    root = tree.getroot()
+    tags = [child.tag for child in root]
 
-tree = ET.parse('config.xml')
-root = tree.getroot()
-for child in root:
-    if child.tag == "detector":
-        DET_PRESENT = True
-        IMAGE_PV = epics.PV(PV_PREFIX + ":" + child.find("image").attrib["pv"])
-        try:
-            IMAGE_TOTAL_PV = epics.PV(PV_PREFIX + ":" + child.find("image_total").attrib["pv"])
-            IMAGE_MAX_PV = epics.PV(PV_PREFIX + ":" + child.find("image_max").attrib["pv"])
-            PIXEL_DIR_1 = child.find("pixel_direction_1").text 
-            PIXEL_DIR_2 = child.find("pixel_direction_2").text
-            C_CH_1 = int(child.find("center_channel_pixel").text.split()[0])
-            C_CH_2 = int(child.find("center_channel_pixel").text.split()[1])
-            N_CH_1 = int(child.find("n_pixels").text.split()[0])
-            N_CH_2 = int(child.find("n_pixels").text.split()[1])
-            PIXEL_WIDTH_1 = float(child.find("size").text.split()[0]) / N_CH_1
-            PIXEL_WIDTH_2 = float(child.find("size").text.split()[1]) / N_CH_2
-            DISTANCE = float(child.find("distance").text)
-            ROI = [0, N_CH_1, 0, N_CH_2]
-        except:
-            HKL_MODE = False
-    elif child.tag == "instrument":
-        INSTR_PRESENT = True
-        try:
-            sample_circles = child.find("sample_circles")
-            SAMPLE_CIRCLE_DIR, SAMPLE_CIRCLE_NAMES, SAMPLE_CIRCLE_PV_LIST = [], [], []
-            for circle_axis in sample_circles:
-                SAMPLE_CIRCLE_NAMES.append(circle_axis.attrib["spec_motor_name"])
-                SAMPLE_CIRCLE_DIR.append(circle_axis.attrib["direction_axis"])
-                SAMPLE_CIRCLE_PV_LIST.append(epics.PV(circle_axis.attrib["pv"]))
-            detector_circles = child.find("detector_circles")
-            DET_CIRCLE_DIR, DET_CIRCLE_NAMES, DET_CIRCLE_PV_LIST = [], [], []
-            for circle_axis in detector_circles:
-                DET_CIRCLE_NAMES.append(circle_axis.attrib["spec_motor_name"])
-                DET_CIRCLE_DIR.append(circle_axis.attrib["direction_axis"])
-                DET_CIRCLE_PV_LIST.append(epics.PV(circle_axis.attrib["pv"]))
-            CIRCLE_PV_LIST = SAMPLE_CIRCLE_PV_LIST + DET_CIRCLE_PV_LIST
-            PRIMARY_BEAM_DIR = [int(axis.text) for axis in child.find("primary_beam_direction")]
-            INPLANE_REF_DIR = [int(axis.text) for axis in child.find("inplane_reference_direction")]
-            SAMPLE_NORM_DIR = [int(axis.text) for axis in child.find("sample_surface_normal_direction")]
-            Q_CONV = xu.experiment.QConversion(SAMPLE_CIRCLE_DIR, DET_CIRCLE_DIR, PRIMARY_BEAM_DIR)
-            UB_MATRIX_PV = epics.PV(child.find("ub_matrix").attrib["pv"])
-        except:
-            HKL_MODE = False
-    elif child.tag == "rois":
-        ROI_PRESENT = True
-        try:
-            ROI_PV_LIST = [{}, {}, {}, {}]
-            for roi, roi_pv_dict in zip(child, ROI_PV_LIST):
-                for roi_attr in roi:
-                    pv = PV_PREFIX + ":" + roi_attr.attrib["pv"]
-                    roi_pv_dict[roi_attr.tag] = epics.PV(pv)
-        except:
-            ROI_MODE = False
-    elif child.tag == "energy":
-        ENERGY_PRESENT = True
-        try:
-            ENERGY_PV = epics.PV(child.attrib["pv"])
-        except:
-            HKL_MODE = False
+    if "pv_prefix" not in tags:
+        raise KeyError("Missing PV prefix.") 
+    if "detector" not in tags:
+        raise KeyError("Missing detector config values.") 
+    if "instrument" not in tags:
+        CONFIG["INSTR_PRESENT"] = False
+        CONFIG["HKL_MODE"] = False
+    if "rois" not in tags:
+        CONFIG["ROI_PRESENT"] = False
+        CONFIG["ROI_MODE"] = False  
+    if "energy" not in tags:
+        CONFIG["ENERGY_PRESENT"] = False
+        CONFIG["HKL_MODE"] = False
 
-if HKL_MODE:
-    HKL_MODE = not False in [DET_PRESENT, INSTR_PRESENT, ENERGY_PRESENT]
+    # Preliminary walkthrough to get PV prefix
+    for child in root:
+        if child.tag == "pv_prefix" and CONFIG["PV_PREFIX"] is None:
+            CONFIG["PV_PREFIX"] = child.text
+            break
 
-if ROI_MODE:
-    ROI_MODE = ROI_PRESENT
+    for child in root:        
+        if child.tag == "detector":
+            CONFIG["DET_PRESENT"] = True
+            try:
+                CONFIG["IMAGE_PV"] = epics.PV(CONFIG["PV_PREFIX"] + ":" + child.find("image").attrib["pv"])
+            except:
+                raise KeyError("Missing detector image PV.")
+            try:
+                CONFIG["IMAGE_TOTAL_PV"] = epics.PV(CONFIG["PV_PREFIX"] + ":" + child.find("image_total").attrib["pv"])
+                CONFIG["IMAGE_MAX_PV"] = epics.PV(CONFIG["PV_PREFIX"] + ":" + child.find("image_max").attrib["pv"])
+                CONFIG["PIXEL_DIR_1"] = child.find("pixel_direction_1").text 
+                CONFIG["PIXEL_DIR_2"] = child.find("pixel_direction_2").text
+                if CONFIG["C_CH_1"] is None:
+                    CONFIG["C_CH_1"] = int(child.find("center_channel_pixel").text.split()[0])
+                if CONFIG["C_CH_2"] is None:
+                    CONFIG["C_CH_2"] = int(child.find("center_channel_pixel").text.split()[1])
+                CONFIG["N_CH_1"] = int(child.find("n_pixels").text.split()[0])
+                CONFIG["N_CH_2"] = int(child.find("n_pixels").text.split()[1])
+                CONFIG["PIXEL_WIDTH_1"] = float(child.find("size").text.split()[0]) / CONFIG["N_CH_1"]
+                CONFIG["PIXEL_WIDTH_2"] = float(child.find("size").text.split()[1]) / CONFIG["N_CH_2"]
+                if CONFIG["DISTANCE"] is None:
+                    CONFIG["DISTANCE"] = float(child.find("distance").text)
+                CONFIG["DET_ROI"] = [0, CONFIG["N_CH_1"], 0, CONFIG["N_CH_2"]]
+            except:
+                CONFIG["DET_PRESENT"] = False
+
+        elif child.tag == "instrument":
+            CONFIG["INSTR_PRESENT"] = True
+            try:
+                sample_circles = child.find("sample_circles")
+                CONFIG["SAMPLE_CIRCLE_DIR"], CONFIG["SAMPLE_CIRCLE_NAMES"], CONFIG["SAMPLE_CIRCLE_PV_LIST"] = [], [], []
+                for circle_axis in sample_circles:
+                    CONFIG["SAMPLE_CIRCLE_NAMES"].append(circle_axis.attrib["spec_motor_name"])
+                    CONFIG["SAMPLE_CIRCLE_DIR"].append(circle_axis.attrib["direction_axis"])
+                    CONFIG["SAMPLE_CIRCLE_PV_LIST"].append(epics.PV(circle_axis.attrib["pv"]))
+                detector_circles = child.find("detector_circles")
+                CONFIG["DET_CIRCLE_DIR"], CONFIG["DET_CIRCLE_NAMES"], CONFIG["DET_CIRCLE_PV_LIST"] = [], [], []
+                for circle_axis in detector_circles:
+                    CONFIG["DET_CIRCLE_NAMES"].append(circle_axis.attrib["spec_motor_name"])
+                    CONFIG["DET_CIRCLE_DIR"].append(circle_axis.attrib["direction_axis"])
+                    CONFIG["DET_CIRCLE_PV_LIST"].append(epics.PV(circle_axis.attrib["pv"]))
+                CONFIG["CIRCLE_PV_LIST"] = CONFIG["SAMPLE_CIRCLE_PV_LIST"] + CONFIG["DET_CIRCLE_PV_LIST"]
+                CONFIG["PRIMARY_BEAM_DIR"] = [int(axis.text) for axis in child.find("primary_beam_direction")]
+                CONFIG["INPLANE_REF_DIR"] = [int(axis.text) for axis in child.find("inplane_reference_direction")]
+                CONFIG["SAMPLE_NORM_DIR"] = [int(axis.text) for axis in child.find("sample_surface_normal_direction")]
+                CONFIG["Q_CONV"] = xu.experiment.QConversion(CONFIG["SAMPLE_CIRCLE_DIR"], CONFIG["DET_CIRCLE_DIR"], CONFIG["PRIMARY_BEAM_DIR"])
+                CONFIG["UB_MATRIX_PV"] = epics.PV(child.find("ub_matrix").attrib["pv"])
+            except:
+                CONFIG["HKL_MODE"] = False
+
+        elif child.tag == "rois":
+            CONFIG["ROI_PRESENT"] = True
+            try:
+                CONFIG["ROI_PV_LIST"] = [{}, {}, {}, {}]
+                for roi, roi_pv_dict in zip(child, CONFIG["ROI_PV_LIST"]):
+                    for roi_attr in roi:
+                        pv = CONFIG["PV_PREFIX"] + ":" + roi_attr.attrib["pv"]
+                        roi_pv_dict[roi_attr.tag] = epics.PV(pv)
+            except:
+                CONFIG["ROI_MODE"] = False
+
+        elif child.tag == "energy":
+            CONFIG["ENERGY_PRESENT"] = True
+            try:
+                CONFIG["ENERGY_PV"] = epics.PV(child.attrib["pv"])
+            except:
+                CONFIG["HKL_MODE"] = False
 
 # =====================================================================
-# UI classes
-class OptionsDialog(QtGui.QWidget):
+# Initial dialog to manually determine PV prefix, detector distance, and the center pixel
+class OptionsDialog(QtWidgets.QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self.prefix_lbl, self.prefix_txt = QtGui.QLabel("PV Prefix: "), QtGui.QLineEdit()
-        self.distance_lbl, self.distance_sbx = QtGui.QLabel("Distance: "), QtGui.QDoubleSpinBox()
-        self.center_x_lbl, self.center_x_sbx = QtGui.QLabel("Center (x): "), QtGui.QSpinBox()
-        self.center_y_lbl, self.center_y_sbx = QtGui.QLabel("Center (y): "), QtGui.QSpinBox()
-        self.btn_bx = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok)
+        self.prefix_lbl, self.prefix_txt = QtWidgets.QLabel("PV Prefix: "), QtWidgets.QLineEdit()
+        self.distance_lbl, self.distance_sbx = QtWidgets.QLabel("Distance: "), QtWidgets.QDoubleSpinBox()
+        self.center_x_lbl, self.center_x_sbx = QtWidgets.QLabel("Center (x): "), QtWidgets.QSpinBox()
+        self.center_y_lbl, self.center_y_sbx = QtWidgets.QLabel("Center (y): "), QtWidgets.QSpinBox()
+        self.btn_bx = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok)
 
         self.distance_sbx.setRange(0, 1000000) 
         self.center_x_sbx.setRange(-1000, 1000) 
         self.center_y_sbx.setRange(-1000, 1000)
 
 
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(self.prefix_lbl, 0, 0)
         self.layout.addWidget(self.prefix_txt, 0, 1)
@@ -116,28 +156,32 @@ class OptionsDialog(QtGui.QWidget):
         self.layout.addWidget(self.center_y_sbx, 3, 1)
         self.layout.addWidget(self.btn_bx, 4, 0, 1, 2)
 
-        if PV_PREFIX is not None:
-            self.prefix_txt.setText(PV_PREFIX)
-        if DISTANCE is not None:
-            self.distance_sbx.setValue(DISTANCE)
-        if C_CH_1 is not None:
-            self.center_x_sbx.setValue(C_CH_1)
-        if C_CH_2 is not None:
-            self.center_y_sbx.setValue(C_CH_2)
+        if CONFIG["PV_PREFIX"] is not None:
+            self.prefix_txt.setText(CONFIG["PV_PREFIX"])
+        if CONFIG["DISTANCE"] is not None:
+            self.distance_sbx.setValue(CONFIG["DISTANCE"])
+        if CONFIG["C_CH_1"] is not None:
+            self.center_x_sbx.setValue(CONFIG["C_CH_1"])
+        if CONFIG["C_CH_2"] is not None:
+            self.center_y_sbx.setValue(CONFIG["C_CH_2"])
 
         self.btn_bx.accepted.connect(self.accept)
         
     def accept(self):
-        PV_PREFIX = self.prefix_txt.text()
-        DISTANCE = self.distance_sbx.value()
-        C_CH_1 = self.center_x_sbx.value()
-        C_CH_2 = self.center_y_sbx.value()
+
+        CONFIG["PV_PREFIX"] = self.prefix_txt.text()
+        CONFIG["DISTANCE"] = self.distance_sbx.value()
+        CONFIG["C_CH_1"] = self.center_x_sbx.value()
+        CONFIG["C_CH_2"] = self.center_y_sbx.value()
         self.close()
+        configure()
         mw = MainWindow()
         mw.show()
         
     def reject(self):
         sys.exit()
+
+# =====================================================================
 
 class MainWindow(DockArea):
     def __init__(self) -> None:
@@ -179,22 +223,23 @@ class MainWindow(DockArea):
         
         self.image_plot.getView().setXLink(self.x_line_plot)
         self.image_plot.getView().setYLink(self.y_line_plot)
-        self.y_line_plot.invertY(True)
+        self.image_plot.getView().invertY(False)
+        self.y_line_plot.invertY(False)
         self.slice_line_plot.hideAxis("bottom")
         #self.x_line_plot.plotItem.setLogMode(y=True)
         #self.y_line_plot.plotItem.setLogMode(x=True)
         #self.slice_line_plot.plotItem.setLogMode(y=True)
 
-        if HKL_MODE:
+        if CONFIG["HKL_MODE"]:
             self.qx, self.qy, self.qz = createRSM()
             
-        if ROI_MODE:
+        if CONFIG["ROI_MODE"]:
             self.rois = []
             self.roi_colors = ["ff0000", "0000ff", "4CBB17", "ff00ff"]
             for i in range(4):
                 roi = pg.ROI(
-                    pos=(ROI_PV_LIST[i]["min_x"].get(), ROI_PV_LIST[i]["min_y"].get()),
-                    size=(ROI_PV_LIST[i]["size_x"].get(), ROI_PV_LIST[i]["size_y"].get()),
+                    pos=(CONFIG["ROI_PV_LIST"][i]["min_x"].get(), CONFIG["ROI_PV_LIST"][i]["min_y"].get()),
+                    size=(CONFIG["ROI_PV_LIST"][i]["size_x"].get(), CONFIG["ROI_PV_LIST"][i]["size_y"].get()),
                     movable=False,
                     resizable=False,
                     pen=pg.mkPen({"color": self.roi_colors[i], "width": 2})
@@ -213,9 +258,9 @@ class MainWindow(DockArea):
 
     def update(self):
         self.image_plot.update()
-        if HKL_MODE:
+        if CONFIG["HKL_MODE"]:
             self.qx, self.qy, self.qz = createRSM()
-        if ROI_MODE:
+        if CONFIG["ROI_MODE"]:
             self.roi_widget.update()
 
     def _setColorMap(self):
@@ -224,6 +269,7 @@ class MainWindow(DockArea):
 
         self.image_plot._setColorMap(color_map, range)
 
+# =====================================================================
 
 class ImagePlot(pg.ImageView):
     def __init__(self, parent) -> None:
@@ -239,11 +285,11 @@ class ImagePlot(pg.ImageView):
         self.image_data = None
         self.color_map = None
         self.color_bar = None
-        self.line_roi = pg.LineSegmentROI([[0, 0], [N_CH_1, N_CH_2]])
+        self.line_roi = pg.LineSegmentROI([[0, 0], [CONFIG["N_CH_1"], CONFIG["N_CH_2"]]])
         self.addItem(self.line_roi)
 
     def update(self):
-        image = np.reshape(IMAGE_PV.get(), (N_CH_2, N_CH_1)).T
+        image = np.reshape(CONFIG["IMAGE_PV"].get(), (CONFIG["N_CH_2"], CONFIG["N_CH_1"])).T
         #image = (np.random.rand(195, 487).T * 1.5) ** 4
         self.image_data = image
         if self.color_map is None:
@@ -259,8 +305,8 @@ class ImagePlot(pg.ImageView):
         self.norm_image = norm_image
 
         self.setImage(self.norm_image, autoRange=False, autoLevels=False)
-        self.parent.x_line_plot.plot(x=np.linspace(0, N_CH_1, N_CH_1), y=np.mean(image, 1), clear=True)
-        self.parent.y_line_plot.plot(x=np.mean(image, 0), y=np.linspace(0, N_CH_2, N_CH_2), clear=True)
+        self.parent.x_line_plot.plot(x=np.linspace(0, CONFIG["N_CH_1"], CONFIG["N_CH_1"]), y=np.mean(image, 1), clear=True)
+        self.parent.y_line_plot.plot(x=np.mean(image, 0), y=np.linspace(0, CONFIG["N_CH_2"], CONFIG["N_CH_2"]), clear=True)
         
         slice_data, slice_coords = self.line_roi.getArrayRegion(data=image, img=self.getImageItem(),  returnMappedCoords=True)
         self.parent.slice_line_plot.plot(x=np.linspace(slice_coords[0][0], slice_coords[0][-1], len(slice_coords[0])), y=slice_data, clear=True)
@@ -282,10 +328,12 @@ class ImagePlot(pg.ImageView):
                 insert_in=self.getView()
             )
         self.setColorMap(color_map)
+        self.color_bar.setCmap(color_map)
         self.color_bar.setLevels(range)
 
+# =====================================================================
 
-class OptionsWidget(QtGui.QWidget):
+class OptionsWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super(OptionsWidget, self).__init__()
         self.parent = parent
@@ -300,19 +348,19 @@ class OptionsWidget(QtGui.QWidget):
 
         self.color_map = None
 
-        self.color_map_cbx = QtGui.QComboBox()
+        self.color_map_cbx = QtWidgets.QComboBox()
         self.color_map_cbx.addItems(self.color_map_list)
         self.color_map_cbx.setCurrentText("viridis")
-        self.scale_cbx = QtGui.QComboBox()
+        self.scale_cbx = QtWidgets.QComboBox()
         self.scale_cbx.addItems(self.scale_list)
         self.scale_cbx.setCurrentText("power")
-        self.max_lbl = QtGui.QLabel("Max: ")
-        self.max_sbx = QtGui.QSpinBox()
+        self.max_lbl = QtWidgets.QLabel("Max: ")
+        self.max_sbx = QtWidgets.QSpinBox()
         self.max_sbx.setMaximum(1000000)
         self.max_sbx.setMinimum(1)
         self.max_sbx.setValue(10000)
 
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(self.color_map_cbx, 0, 0)
         self.layout.addWidget(self.scale_cbx, 0, 1)
@@ -324,7 +372,7 @@ class OptionsWidget(QtGui.QWidget):
 
         self.setColorMap()
 
-class MouseInfoWidget(QtGui.QWidget):
+class MouseInfoWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super(MouseInfoWidget, self).__init__()
         self.parent = parent
@@ -333,17 +381,17 @@ class MouseInfoWidget(QtGui.QWidget):
 
         labels = ["x-pos: ", "y-pos: ", "Value: "]
         hkl_labels = ["H: ", "K: ", "L: ", ]
-        if HKL_MODE:
+        if CONFIG["HKL_MODE"]:
             labels = labels + hkl_labels
 
         self.lbls, self.txts = [], []
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 3)
         for i in range(len(labels)):
             label = labels[i]
-            lbl, txt = QtGui.QLabel(label), QtGui.QLineEdit()
+            lbl, txt = QtWidgets.QLabel(label), QtWidgets.QLineEdit()
             txt.setReadOnly(True)
             self.lbls.append(lbl)
             self.txts.append(txt)
@@ -363,24 +411,24 @@ class MouseInfoWidget(QtGui.QWidget):
             img = self.parent.image_plot.image_data
             if 0 <= x < img.shape[0] and 0 <= y < img.shape[1]:
                 self.txts[2].setText(str(round(img[int(x)][int(y)], 5)))
-                if HKL_MODE:
+                if CONFIG["HKL_MODE"]:
                     self.txts[3].setText(str(round(self.parent.qx[int(x)][int(y)], 7)))
                     self.txts[4].setText(str(round(self.parent.qy[int(x)][int(y)], 7)))
                     self.txts[5].setText(str(round(self.parent.qz[int(x)][int(y)], 7)))
             else:
                 self.txts[2].setText("")
-                if HKL_MODE:
+                if CONFIG["HKL_MODE"]:
                     self.txts[3].setText("")
                     self.txts[4].setText("")
                     self.txts[5].setText("")
 
-class ROIInfoWidget(QtGui.QWidget):
+class ROIInfoWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super(ROIInfoWidget, self).__init__()
         self.parent = parent
 
         self.lbls, self.txts = [], []
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 3)
@@ -388,25 +436,24 @@ class ROIInfoWidget(QtGui.QWidget):
         for i in range(len(self.parent.rois)):
             label = f"ROI #{i + 1} Total: "
             color = self.parent.roi_colors[i]
-            lbl, txt = QtGui.QLabel(label), QtGui.QLineEdit()
-            print(color)
+            lbl, txt = QtWidgets.QLabel(label), QtWidgets.QLineEdit()
             lbl.setStyleSheet(f"color: #{color}")
             txt.setReadOnly(True)
             self.lbls.append(lbl)
             self.txts.append(txt)
             self.layout.addWidget(lbl, i, 0)
             self.layout.addWidget(txt, i, 1)
-        self.show_chkbx = QtGui.QCheckBox("Show Regions")
+        self.show_chkbx = QtWidgets.QCheckBox("Show Regions")
         self.show_chkbx.setChecked(True)
         
-        self.img_total_lbl = QtGui.QLabel("Image Total: ")
-        self.img_total_txt = QtGui.QLineEdit()
+        self.img_total_lbl = QtWidgets.QLabel("Image Total: ")
+        self.img_total_txt = QtWidgets.QLineEdit()
         self.img_total_txt.setReadOnly(True)
         self.layout.addWidget(self.img_total_lbl, 5, 0)
         self.layout.addWidget(self.img_total_txt, 5, 1)
 
-        self.img_max_lbl = QtGui.QLabel("Image Max: ")
-        self.img_max_txt = QtGui.QLineEdit()
+        self.img_max_lbl = QtWidgets.QLabel("Image Max: ")
+        self.img_max_txt = QtWidgets.QLineEdit()
         self.img_max_txt.setReadOnly(True)
         self.layout.addWidget(self.img_max_lbl, 6, 0)
         self.layout.addWidget(self.img_max_txt, 6, 1)
@@ -416,13 +463,13 @@ class ROIInfoWidget(QtGui.QWidget):
         self.show_chkbx.stateChanged.connect(self.toggleROIVisibility)
 
     def update(self):
-        for roi, roi_pvs, txt in zip(self.parent.rois, ROI_PV_LIST, self.txts):
+        for roi, roi_pvs, txt in zip(self.parent.rois, CONFIG["ROI_PV_LIST"], self.txts):
             txt.setText(str(roi_pvs["total"].get()))
             roi.setPos((roi_pvs["min_x"].get(), roi_pvs["min_y"].get()))
             roi.setSize((roi_pvs["size_x"].get(), roi_pvs["size_y"].get()))
 
-        self.img_total_txt.setText(str(IMAGE_TOTAL_PV.get()))
-        self.img_max_txt.setText(str(IMAGE_MAX_PV.get()))
+        self.img_total_txt.setText(str(CONFIG["IMAGE_TOTAL_PV"].get()))
+        self.img_max_txt.setText(str(CONFIG["IMAGE_MAX_PV"].get()))
         
     def toggleROIVisibility(self):
         if self.show_chkbx.isChecked():
@@ -432,16 +479,18 @@ class ROIInfoWidget(QtGui.QWidget):
             for roi in self.parent.rois:
                 roi.hide()
 
-class LineROIInfoWidget(QtGui.QWidget):
+# =====================================================================
+
+class LineROIInfoWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super(LineROIInfoWidget, self).__init__()
         self.parent = parent  
 
         self.color_btn = pg.ColorButton(color=(255, 255, 255))
-        self.show_chkbx = QtGui.QCheckBox("Show Line ROI")
+        self.show_chkbx = QtWidgets.QCheckBox("Show Line ROI")
         self.show_chkbx.setChecked(True)
 
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(self.color_btn, 0, 0)
         self.layout.addWidget(self.show_chkbx, 1, 0)
@@ -449,7 +498,7 @@ class LineROIInfoWidget(QtGui.QWidget):
 # =====================================================================
 # Utility functions
 
-class ColorMapController(QtGui.QWidget):
+class ColorMapController(QtWidgets.QWidget):
     """Allows user to apply a colormap to an image."""
 
     colorMapChanged = QtCore.pyqtSignal()
@@ -478,49 +527,49 @@ class ColorMapController(QtGui.QWidget):
         self.gamma = 2.0
 
         # Child widgets
-        self.name_cbx = QtGui.QComboBox()
+        self.name_cbx = QtWidgets.QComboBox()
         self.name_cbx.addItems(available_color_maps)
-        self.scale_cbx = QtGui.QComboBox()
+        self.scale_cbx = QtWidgets.QComboBox()
         self.scale_cbx.addItems(scales)
-        self.n_pts_lbl = QtGui.QLabel("# Points:")
-        self.n_pts_sbx = QtGui.QSpinBox()
+        self.n_pts_lbl = QtWidgets.QLabel("# Points:")
+        self.n_pts_sbx = QtWidgets.QSpinBox()
         self.n_pts_sbx.setMinimum(2)
         self.n_pts_sbx.setMaximum(256)
         self.n_pts_sbx.setValue(16)
-        self.base_lbl = QtGui.QLabel("Base:")
+        self.base_lbl = QtWidgets.QLabel("Base:")
         self.base_lbl.setAlignment(
             QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter
         )
         self.base_lbl.hide()
-        self.base_sbx = QtGui.QDoubleSpinBox()
+        self.base_sbx = QtWidgets.QDoubleSpinBox()
         self.base_sbx.setMinimum(0.0001)
         self.base_sbx.setMaximum(1000)
         self.base_sbx.setSingleStep(0.1)
         self.base_sbx.hide()
         self.base_sbx.setValue(2.0)
-        self.gamma_lbl = QtGui.QLabel("Gamma:")
+        self.gamma_lbl = QtWidgets.QLabel("Gamma:")
         self.gamma_lbl.setAlignment(
             QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter
         )
         self.gamma_lbl.hide()
-        self.gamma_sbx = QtGui.QDoubleSpinBox()
+        self.gamma_sbx = QtWidgets.QDoubleSpinBox()
         self.gamma_sbx.setMinimum(0.0001)
         self.gamma_sbx.setMaximum(1000)
         self.gamma_sbx.setSingleStep(0.1)
         self.gamma_sbx.hide()
         self.gamma_sbx.setValue(2.0)
-        self.max_value_lbl = QtGui.QLabel("Max: ")
+        self.max_value_lbl = QtWidgets.QLabel("Max: ")
         self.max_value_lbl.setAlignment(
             QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter
         )
-        self.max_value_sbx = QtGui.QSpinBox()
+        self.max_value_sbx = QtWidgets.QSpinBox()
         self.max_value_sbx.setMinimum(1)
         self.max_value_sbx.setMaximum(1000000)
         self.max_value_sbx.setSingleStep(1)
         self.max_value_sbx.setValue(1000)
 
         # Layout
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
         self.layout.addWidget(self.name_cbx, 0, 0, 1, 2)
         self.layout.addWidget(self.scale_cbx, 1, 0, 1, 2)
@@ -638,17 +687,18 @@ def createColorMap(
     return pg.ColorMap(pos=stops, color=colors)
 
 def createRSM():
-    hxrd = xu.HXRD(INPLANE_REF_DIR, SAMPLE_NORM_DIR, en=ENERGY_PV.get()*1000, qconv=Q_CONV)
-    hxrd.Ang2Q.init_area(PIXEL_DIR_1, PIXEL_DIR_2, cch1=C_CH_1, cch2=C_CH_2,
-        Nch1=N_CH_1, Nch2=N_CH_2, pwidth1=PIXEL_WIDTH_1, pwidth2=PIXEL_WIDTH_2,
-        distance=DISTANCE, roi=ROI)
-    angles = [pv.get() for pv in CIRCLE_PV_LIST]
-    ub = np.reshape(UB_MATRIX_PV.get(), (3, 3))
+    hxrd = xu.HXRD(CONFIG["INPLANE_REF_DIR"], CONFIG["SAMPLE_NORM_DIR"], en=CONFIG["ENERGY_PV"].get()*1000, qconv=CONFIG["Q_CONV"])
+    hxrd.Ang2Q.init_area(CONFIG["PIXEL_DIR_1"], CONFIG["PIXEL_DIR_2"], cch1=CONFIG["C_CH_1"], cch2=CONFIG["C_CH_2"],
+        Nch1=CONFIG["N_CH_1"], Nch2=CONFIG["N_CH_2"], pwidth1=CONFIG["PIXEL_WIDTH_1"], pwidth2=CONFIG["PIXEL_WIDTH_2"],
+        distance=CONFIG["DISTANCE"], roi=CONFIG["DET_ROI"])
+    angles = [pv.get() for pv in CONFIG["CIRCLE_PV_LIST"]]
+    ub = np.reshape(CONFIG["UB_MATRIX_PV"].get(), (3, 3))
     return hxrd.Ang2Q.area(*angles, UB=ub)
 
-# =====================================================================
-
 app = pg.mkQApp("Live Image")
+configure()
 od = OptionsDialog()
 od.show()
 pg.mkQApp().exec_()
+
+configure()
